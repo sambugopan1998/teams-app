@@ -6,15 +6,21 @@
 
   <!-- ✅ Teams JavaScript SDK FIRST -->
   <script src="https://res.cdn.office.net/teams-js/2.0.0/js/MicrosoftTeams.min.js"></script>
-  <script src="https://alcdn.msauth.net/browser/2.37.0/js/msal-browser.min.js"></script>
+  <!-- <script src="https://alcdn.msauth.net/browser/2.37.0/js/msal-browser.min.js"></script> -->
   <script src="./user-profile.js"></script>
 
 
 </head>
 <body>
-  <h2>User Details</h2>
+  <h1>Hello from Teams</h1>
   <div id="user-info">Loading...</div>
-  <h3>Access Token</h3>
-  <pre id="access-token">Loading...</pre>
+  <pre id="access-token">Loading token...</pre>
+
+  <script>
+    // Optional: confirm SDK loaded in Teams
+    if (window.microsoftTeams) {
+      microsoftTeams.appInitialization.notifySuccess();
+    }
+  </script>
 </body>
-</html
+</html>

@@ -1,47 +1,39 @@
-const msalConfig = {
-  auth: {
-    clientId: '0486fae2-afeb-4044-ab8d-0c060910b0a8',
-    authority: 'https://login.microsoftonline.com/c06fea01-72bf-415d-ac1d-ac0382f8d39f',
-    redirectUri: "https://sambugopan1998.github.io/teams-app/hello.html"
-  }
-};
+microsoftTeams.app.initialize().then(() => {
+  // Use Teams SSO to get the token
+  microsoftTeams.authentication.getAuthToken({
+    successCallback: async (token) => {
+      console.log("✅ Token received from Teams SSO");
+      document.getElementById("access-token").textContent = token;
 
-const msalInstance = new msal.PublicClientApplication(msalConfig);
-const loginRequest = { scopes: ["User.Read"] };
+      try {
+        // Fetch user details from Microsoft Graph
+        const res = await fetch("https://graph.microsoft.com/v1.0/me", {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
 
-async function acquireAccessToken() {
-  try {
-    const accounts = msalInstance.getAllAccounts();
-    if (accounts.length === 0) {
-      const loginResponse = await msalInstance.loginPopup(loginRequest);
-      msalInstance.setActiveAccount(loginResponse.account);
-    } else {
-      msalInstance.setActiveAccount(accounts[0]);
+        const user = await res.json();
+
+        // Display user details
+        document.getElementById("user-info").innerHTML = `
+          ✅ <strong>Display Name:</strong> ${user.displayName}<br>
+          👤 <strong>Given Name:</strong> ${user.givenName || "-"}<br>
+          📧 <strong>Email:</strong> ${user.mail || user.userPrincipalName}<br>
+          🧑‍💼 <strong>Job Title:</strong> ${user.jobTitle || "-"}<br>
+          🏢 <strong>Office Location:</strong> ${user.officeLocation || "-"}<br>
+          🆔 <strong>ID:</strong> ${user.id}
+        `;
+      } catch (error) {
+        console.error("❌ Microsoft Graph call failed:", error);
+        document.getElementById("user-info").textContent = "Failed to load user profile.";
+      }
+    },
+    failureCallback: (error) => {
+      console.error("❌ Failed to get token via Teams SSO:", error);
+      document.getElementById("access-token").textContent = "Token fetch failed.";
+      document.getElementById("user-info").textContent = "Authentication failed.";
     }
-
-    const tokenResponse = await msalInstance.acquireTokenSilent(loginRequest);
-    return tokenResponse.accessToken;
-
-  } catch (error) {
-    console.warn("Silent token failed, using popup", error);
-    const tokenResponse = await msalInstance.acquireTokenPopup(loginRequest);
-    return tokenResponse.accessToken;
-  }
-}
-
-(async () => {
-  const token = await acquireAccessToken();
-  document.getElementById("access-token").textContent = token;
-
-  const res = await fetch("https://graph.microsoft.com/v1.0/me", {
-    headers: { Authorization: `Bearer ${token}` }
   });
-  const user = await res.json();
-
-  document.getElementById("user-info").innerHTML = `
-    ✅ Name: ${user.displayName}<br>
-    📧 Email: ${user.mail || user.userPrincipalName}
-  `;
-})();
-
+});
 

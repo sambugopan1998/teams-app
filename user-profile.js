@@ -2,7 +2,7 @@ const msalConfig = {
   auth: {
     clientId: '0486fae2-afeb-4044-ab8d-0c060910b0a8',
     authority: 'https://login.microsoftonline.com/c06fea01-72bf-415d-ac1d-ac0382f8d39f',
-    redirectUri: "https://excited-lion.static.domains/hello"
+    redirectUri: "https://sambugopan1998.github.io/teams-app/hello.html"
   }
 };
 

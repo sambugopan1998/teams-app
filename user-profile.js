@@ -1,26 +1,21 @@
 microsoftTeams.app.initialize().then(() => {
   microsoftTeams.authentication.getAuthToken({
+    resources: ["api://cffb6ae3-74c6-4853-a034-9c"], // ✅ custom app
     successCallback: async (token) => {
-      document.getElementById("access-token").textContent = token;
-      try {
-        const res = await fetch("https://graph.microsoft.com/v1.0/me", {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (!res.ok) throw new Error("Graph call failed");
-        const user = await res.json();
-        document.getElementById("user-info").innerHTML = `
-          👤 Name: ${user.displayName}<br>
-          📧 Email: ${user.mail || user.userPrincipalName}<br>
-          🏢 Location: ${user.officeLocation || "Not set"}
-        `;
-      } catch (err) {
-        console.error("Graph error:", err);
-        document.getElementById("user-info").textContent = "❌ Error fetching profile.";
-      }
+      console.log("Token received:", token);
+      const res = await fetch("https://graph.microsoft.com/v1.0/me", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const user = await res.json();
+      document.getElementById("user-info").innerHTML = `
+        👤 Name: ${user.displayName}<br>
+        📧 Email: ${user.mail || user.userPrincipalName}
+      `;
     },
-    failureCallback: (error) => {
-      document.getElementById("access-token").textContent = `❌ Token failed: ${error}`;
-      console.error("Token error", error);
+    failureCallback: (err) => {
+      console.error("Token error:", err);
+      document.getElementById("user-info").textContent = "❌ Token failed";
     }
   });
 });
+

@@ -13,6 +13,7 @@ const msalConfig = {
         scopes: ["User.Read"]
       }).then((response) => {
         const accessToken = response.accessToken;
+        console.log("accessToken:",accessToken);
         fetch("https://graph.microsoft.com/v1.0/me", {
           headers: {
             Authorization: `Bearer ${accessToken}`

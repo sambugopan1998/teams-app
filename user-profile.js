@@ -1,6 +1,6 @@
 microsoftTeams.app.initialize().then(() => {
   microsoftTeams.authentication.getAuthToken({
-    resources: ["api://cffb6ae3-74c6-4853-a034-9c"], // ✅ custom app
+    resources: ["api://0486fae2-afeb-4044-ab8d-0c060910b0a8"], // ✅ custom app
     successCallback: async (token) => {
       console.log("Token received:", token);
       const res = await fetch("https://graph.microsoft.com/v1.0/me", {

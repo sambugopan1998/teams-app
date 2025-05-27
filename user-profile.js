@@ -7,46 +7,52 @@ const msalConfig = {
 };
 
 const msalInstance = new msal.PublicClientApplication(msalConfig);
-const loginRequest = { scopes: ["User.Read"] };
+const loginRequest = { scopes: ["User.Read", "Directory.Read.All"] };
 
-async function acquireAccessToken() {
-  try {
-    const accounts = msalInstance.getAllAccounts();
-
-    if (accounts.length === 0) {
-      const loginResponse = await msalInstance.loginPopup(loginRequest);
-      msalInstance.setActiveAccount(loginResponse.account);
-    } else {
-      msalInstance.setActiveAccount(accounts[0]);
-    }
-
-    const tokenResponse = await msalInstance.acquireTokenSilent(loginRequest);
-    return tokenResponse.accessToken;
-
-  } catch (error) {
-    console.warn("Silent token failed, using popup", error);
-
-    try {
-      const tokenResponse = await msalInstance.acquireTokenPopup(loginRequest);
-      return tokenResponse.accessToken;
-    } catch (popupError) {
-      // 👇 Show popup error in UI
-      document.getElementById("user-info").textContent =
-        `❌ Popup error: ${popupError.name} — ${popupError.message}`;
-      throw popupError;
-    }
-  }
+// Utility to check if app is running inside Microsoft Teams iframe
+function isRunningInTeams() {
+  return window.self !== window.top && window.navigator.userAgent.includes("Teams");
 }
 
-(async () => {
+// Acquire token based on environment
+async function acquireAccessToken() {
+  const accounts = msalInstance.getAllAccounts();
+
+  if (accounts.length === 0) {
+    if (isRunningInTeams()) {
+      msalInstance.loginRedirect(loginRequest); // ✅ for Teams iframe
+      return null;
+    } else {
+      const loginResponse = await msalInstance.loginPopup(loginRequest); // ✅ for browser
+      msalInstance.setActiveAccount(loginResponse.account);
+    }
+  } else {
+    msalInstance.setActiveAccount(accounts[0]);
+  }
+
+  const tokenResponse = await msalInstance.acquireTokenSilent({
+    ...loginRequest,
+    account: msalInstance.getActiveAccount()
+  });
+
+  return tokenResponse.accessToken;
+}
+
+// Main flow: Handle redirect, then fetch data
+msalInstance.handleRedirectPromise().then(async (response) => {
+  if (response) {
+    msalInstance.setActiveAccount(response.account);
+  }
+
   const token = await acquireAccessToken();
+  if (!token) return; // redirect started, wait for return
 
   document.getElementById("access-token").textContent = token;
 
-  // 1. Get basic user profile
-  const profileRes = await fetch("https://graph.microsoft.com/v1.0/me", {
-    headers: { Authorization: `Bearer ${token}` }
-  });
+  const headers = { Authorization: `Bearer ${token}` };
+
+  // 1. Profile
+  const profileRes = await fetch("https://graph.microsoft.com/v1.0/me", { headers });
   const user = await profileRes.json();
 
   let html = "<h3>👤 Profile Info</h3><ul>";
@@ -56,34 +62,32 @@ async function acquireAccessToken() {
   html += "</ul>";
   document.getElementById("user-info").innerHTML = html;
 
-  // 2. Get user photo
-  const photoRes = await fetch("https://graph.microsoft.com/v1.0/me/photo/$value", {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-
-  if (photoRes.ok) {
-    const blob = await photoRes.blob();
-    const imgURL = URL.createObjectURL(blob);
-    const imgTag = `<h3>🖼️ Profile Photo</h3><img src="${imgURL}" alt="Profile Photo" style="height:100px;border-radius:50%;">`;
-    document.getElementById("user-info").insertAdjacentHTML("afterbegin", imgTag);
+  // 2. Photo
+  try {
+    const photoRes = await fetch("https://graph.microsoft.com/v1.0/me/photo/$value", { headers });
+    if (photoRes.ok) {
+      const blob = await photoRes.blob();
+      const imgURL = URL.createObjectURL(blob);
+      const imgTag = `<h3>🖼️ Photo</h3><img src="${imgURL}" style="height:100px;border-radius:50%">`;
+      document.getElementById("user-info").insertAdjacentHTML("afterbegin", imgTag);
+    }
+  } catch (err) {
+    console.warn("Photo not available.");
   }
 
-  // 3. Get directory roles or group memberships
-  const roleRes = await fetch("https://graph.microsoft.com/v1.0/me/memberOf", {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-
+  // 3. Roles
+  const roleRes = await fetch("https://graph.microsoft.com/v1.0/me/memberOf", { headers });
   if (roleRes.ok) {
-    const roleData = await roleRes.json();
-    let rolesHTML = "<h3>🔐 Roles / Groups</h3><ul>";
-
-    roleData.value.forEach(entry => {
-      rolesHTML += `<li><strong>${entry["@odata.type"]}</strong>: ${entry.displayName}</li>`;
+    const roles = await roleRes.json();
+    let html = "<h3>🔐 Roles / Groups</h3><ul>";
+    roles.value.forEach(entry => {
+      html += `<li><strong>${entry["@odata.type"]}</strong>: ${entry.displayName || "Unnamed"}</li>`;
     });
-
-    rolesHTML += "</ul>";
-    document.getElementById("user-info").insertAdjacentHTML("beforeend", rolesHTML);
-  } else {
-    console.warn("Group/role info could not be fetched. Missing permissions?");
+    html += "</ul>";
+    document.getElementById("user-info").insertAdjacentHTML("beforeend", html);
   }
-})();
+}).catch(err => {
+  console.error("Auth error:", err);
+  document.getElementById("user-info").textContent =
+    `❌ ${err.name} — ${err.message}`;
+});

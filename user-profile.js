@@ -1,4 +1,5 @@
-const msalConfig = {
+  <script src="https://res.cdn.office.net/teams-js/2.0.0/js/MicrosoftTeams.min.js"></script>
+  const msalConfig = {
       auth: {
         clientId: "0486fae2-afeb-4044-ab8d-0c060910b0a8",
         authority: "https://login.microsoftonline.com/c06fea01-72bf-415d-ac1d-ac0382f8d39f",

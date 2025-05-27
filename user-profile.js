@@ -21,7 +21,6 @@ microsoftTeams.app.initialize().then(() => {
     failureCallback: (error) => {
       document.getElementById("access-token").textContent = `❌ Token failed: ${error}`;
       console.error("Token error", error);
-    },
-      resources: ["api://0486fae2-afeb-4044-ab8d-0c060910b0a8"]
+    }
   });
 });

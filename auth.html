@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Auth Redirect</title>
+  <script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
+  <script src="https://res.cdn.office.net/teams-js/2.16.0/js/MicrosoftTeams.min.js"></script>
+</head>
+<body>
+  <p>Authenticating...</p>
+  <script>
+    const msalConfig = {
+      auth: {
+        clientId: "0486fae2-afeb-4044-ab8d-0c060910b0a8",
+        authority: "https://login.microsoftonline.com/c06fea01-72bf-415d-ac1d-ac0382f8d39f",
+        redirectUri: window.location.href
+      }
+    };
+
+    const msalInstance = new msal.PublicClientApplication(msalConfig);
+
+    microsoftTeams.app.initialize().then(() => {
+      msalInstance.loginPopup({ scopes: ["User.Read", "Directory.Read.All"] })
+        .then(response => {
+          msalInstance.setActiveAccount(response.account);
+          return msalInstance.acquireTokenSilent({
+            scopes: ["User.Read", "Directory.Read.All"],
+            account: response.account
+          });
+        })
+        .then(tokenResp => {
+          microsoftTeams.authentication.notifySuccess(tokenResp.accessToken);
+        })
+        .catch(err => {
+          microsoftTeams.authentication.notifyFailure(err.message);
+        });
+    });
+  </script>
+</body>
+</html>

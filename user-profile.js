@@ -1,11 +1,11 @@
+// auth.js (type="module")
 const msalConfig = {
   auth: {
     clientId: "0486fae2-afeb-4044-ab8d-0c060910b0a8",
     authority: "https://login.microsoftonline.com/c06fea01-72bf-415d-ac1d-ac0382f8d39f",
-    redirectUri: "https://sambugopan1998.github.io/teams-app/hello.html", // Must match portal
+    redirectUri: "https://sambugopan1998.github.io/teams-app/hello.html", // Must be Teams app registered URL
   },
 };
-
 const loginScopes = ["User.Read", "Directory.Read.All"];
 
 const state = {
@@ -13,126 +13,80 @@ const state = {
   accessToken: "",
 };
 
-function logToPage(message, isError = false) {
+function log(msg, isError = false) {
   const el = document.getElementById("log-output");
   const p = document.createElement("p");
-  p.textContent = message;
+  p.textContent = msg;
   p.style.color = isError ? "red" : "green";
   el.appendChild(p);
 }
 
-function isRunningInTeams() {
+function isInTeams() {
   return typeof microsoftTeams !== "undefined";
 }
 
 async function waitForTeamsInit() {
   return new Promise((resolve) => {
     microsoftTeams.app.initialize().then(() => {
-      logToPage("✅ Teams SDK initialized");
+      log("✅ Teams SDK initialized");
       resolve(true);
-    }).catch((e) => {
-      logToPage("❌ Teams SDK init failed: " + e.message, true);
+    }).catch((err) => {
+      log("❌ Teams SDK init failed: " + err.message, true);
       resolve(false);
     });
   });
 }
 
-async function authenticate() {
+async function loginFlow() {
   await state.msalInstance.initialize();
-
   const accounts = state.msalInstance.getAllAccounts();
+
   if (accounts.length === 0) {
-    if (isRunningInTeams()) {
+    if (isInTeams()) {
       await waitForTeamsInit();
-      logToPage("🔁 Login redirect (Teams)");
-      return state.msalInstance.loginRedirect({ scopes: loginScopes });
+      log("🔁 Logging in with redirect (Teams)");
+      state.msalInstance.loginRedirect({ scopes: loginScopes });
     } else {
-      try {
-        logToPage("🔁 Login popup (Browser)");
-        const loginResp = await state.msalInstance.loginPopup({ scopes: loginScopes });
-        state.msalInstance.setActiveAccount(loginResp.account);
-      } catch (err) {
-        logToPage("❌ Login popup failed: " + err.message, true);
-        return null;
-      }
+      log("🔁 Logging in with popup (browser)");
+      const loginResponse = await state.msalInstance.loginPopup({ scopes: loginScopes });
+      state.msalInstance.setActiveAccount(loginResponse.account);
     }
   } else {
     state.msalInstance.setActiveAccount(accounts[0]);
-    logToPage("✅ Existing session");
+    log("✅ Already signed in");
   }
 
   try {
-    const tokenResp = await state.msalInstance.acquireTokenSilent({
+    const tokenResponse = await state.msalInstance.acquireTokenSilent({
       scopes: loginScopes,
-      account: state.msalInstance.getActiveAccount()
+      account: state.msalInstance.getActiveAccount(),
     });
-    state.accessToken = tokenResp.accessToken;
-    logToPage("✅ Token acquired silently");
-    return tokenResp.accessToken;
-  } catch (e) {
-    logToPage("⚠️ Silent token failed: " + e.message, true);
-
-    if (!isRunningInTeams()) {
-      try {
-        const popupResp = await state.msalInstance.acquireTokenPopup({ scopes: loginScopes });
-        state.accessToken = popupResp.accessToken;
-        logToPage("✅ Token acquired via popup");
-        return popupResp.accessToken;
-      } catch (popupErr) {
-        logToPage("❌ Token popup failed: " + popupErr.message, true);
-        return null;
-      }
-    } else {
-      logToPage("🔁 Token redirect (Teams)");
-      return state.msalInstance.acquireTokenRedirect({ scopes: loginScopes });
-    }
+    state.accessToken = tokenResponse.accessToken;
+    document.getElementById("access-token").textContent = tokenResponse.accessToken;
+    log("✅ Token acquired");
+    await fetchGraphData(tokenResponse.accessToken);
+  } catch (err) {
+    log("❌ Silent token error: " + err.message, true);
   }
 }
 
 async function fetchGraphData(token) {
   const headers = { Authorization: `Bearer ${token}` };
 
-  try {
-    const profileRes = await fetch("https://graph.microsoft.com/v1.0/me", { headers });
-    const profile = await profileRes.json();
-
-    let html = "<h3>👤 Profile Info</h3><ul>";
-    for (const [key, value] of Object.entries(profile)) {
-      html += `<li><strong>${key}</strong>: ${value ?? "N/A"}</li>`;
-    }
-    html += "</ul>";
-    document.getElementById("user-info").innerHTML = html;
-  } catch (err) {
-    logToPage("❌ Profile fetch failed: " + err.message, true);
-  }
-
-  try {
-    const photoRes = await fetch("https://graph.microsoft.com/v1.0/me/photo/$value", { headers });
-    if (photoRes.ok) {
-      const blob = await photoRes.blob();
-      const imgURL = URL.createObjectURL(blob);
-      document.getElementById("user-info").insertAdjacentHTML("afterbegin",
-        `<h3>🖼️ Photo</h3><img src="${imgURL}" style="height:100px;border-radius:50%">`
-      );
-    } else {
-      logToPage("⚠️ No photo found");
-    }
-  } catch (err) {
-    logToPage("❌ Photo fetch failed: " + err.message, true);
-  }
+  // Profile
+  const res = await fetch("https://graph.microsoft.com/v1.0/me", { headers });
+  const profile = await res.json();
+  const info = document.getElementById("user-info");
+  info.innerHTML = `<h3>👤 Profile</h3><pre>${JSON.stringify(profile, null, 2)}</pre>`;
 }
 
+// Handle redirect
 state.msalInstance.handleRedirectPromise().then(async (response) => {
   if (response && response.account) {
     state.msalInstance.setActiveAccount(response.account);
-    logToPage("✅ Redirect login success");
+    log("✅ Redirect login complete");
   }
-
-  const token = await authenticate();
-  if (token) {
-    document.getElementById("access-token").textContent = token;
-    await fetchGraphData(token);
-  }
+  await loginFlow();
 }).catch((err) => {
-  logToPage("❌ Auth error: " + err.message, true);
+  log("❌ Redirect error: " + err.message, true);
 });

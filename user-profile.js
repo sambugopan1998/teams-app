@@ -2,7 +2,7 @@ const msalConfig = {
   auth: {
     clientId: "0486fae2-afeb-4044-ab8d-0c060910b0a8",
     authority: "https://login.microsoftonline.com/c06fea01-72bf-415d-ac1d-ac0382f8d39f",
-    redirectUri:'https://sambugopan1998.github.io/teams-app/hello.html',
+    redirectUri: 'https://sambugopan1998.github.io/teams-app/hello.html',
   }
 };
 
@@ -18,7 +18,7 @@ function renderError(error) {
   const errMsg = error?.message || JSON.stringify(error) || "Unknown error";
   app.innerHTML += `
     <div style="color: red;">
-      <h4>❌ Error:</h4>
+      <h4>Error:</h4>
       <pre>${errMsg}</pre>
     </div>`;
 }
@@ -57,7 +57,56 @@ async function signIn() {
   } catch (err) {
     renderError(err);
   }
+  try {
+    const msalToken = await getClientSideToken();
+    const ssoToken = await getAuthToken();
+    console.log("Both tokens acquired.");
+  } catch (e) {
+    renderError(e);
+  }
 }
+// Fetches token using MSAL (client-side Graph token)
+async function getClientSideToken() {
+  try {
+    const account = msalInstance.getActiveAccount();
+    if (!account) throw new Error("No active account. Please sign in first.");
+
+    const response = await msalInstance.acquireTokenSilent({
+      scopes,
+      account
+    });
+
+    console.log("✅ MSAL token:", response.accessToken);
+    return response.accessToken;
+  } catch (err) {
+    console.error("❌ MSAL Token Error", err);
+    throw err;
+  }
+}
+
+// Fetches Teams SSO token using Teams SDK (if app is running inside Teams)
+async function getAuthToken() {
+  try {
+    await microsoftTeams.app.initialize();
+
+    return new Promise((resolve, reject) => {
+      microsoftTeams.authentication.getAuthToken({
+        successCallback: (token) => {
+          console.log("✅ Teams SSO Token:", token);
+          resolve(token);
+        },
+        failureCallback: (error) => {
+          console.error("❌ getAuthToken failed:", error);
+          reject(error);
+        }
+      });
+    });
+  } catch (err) {
+    console.error("❌ Teams Auth SDK error", err);
+    throw err;
+  }
+}
+
 
 async function fetchGraphData(token) {
   try {

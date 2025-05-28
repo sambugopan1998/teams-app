@@ -15,12 +15,12 @@ function render(content) {
 }
 
 function renderError(error) {
-  const errMsg = `
-    <div style="color: red; margin-top: 1em;">
+  const errMsg = error?.message || JSON.stringify(error) || "Unknown error";
+  app.innerHTML += `
+    <div style="color: red;">
       <h4>❌ Error:</h4>
-      <pre>${JSON.stringify(error, null, 2)}</pre>
+      <pre>${errMsg}</pre>
     </div>`;
-  app.innerHTML += errMsg;
 }
 
 function renderUser(user, groupsHTML, token) {
@@ -32,47 +32,24 @@ function renderUser(user, groupsHTML, token) {
 
   app.innerHTML = `
     ${userDetails}
-    <h3>🔐 Groups</h3>${groupsHTML}
-    <h4>🪪 Access Token</h4><textarea style="width:100%;height:100px">${token}</textarea>
+    <h3>🔐 Roles / Groups</h3>
+    ${groupsHTML}
+    <h3>🔑 Access Token</h3>
+    <textarea readonly>${token}</textarea>
   `;
 }
 
-function signInUI() {
+function signInButton() {
   render(`<button id="signin">🔐 Sign in with Microsoft</button>`);
-  document.getElementById("signin").addEventListener("click", signIn);
+  document.getElementById("signin").onclick = signIn;
 }
 
 async function signIn() {
   try {
     await microsoftTeams.app.initialize();
-
-    microsoftTeams.authentication.authenticate({
-      url: window.location.href,
-      width: 600,
-      height: 535,
-      successCallback: () => attemptSilentSignIn(),
-      failureCallback: (err) => renderError(err),
-    });
-  } catch (e) {
-    renderError(e);
-  }
-}
-
-async function attemptSilentSignIn() {
-  const account = msalInstance.getAllAccounts()[0];
-  if (!account) return signInUI();
-
-  try {
-    const tokenResponse = await msalInstance.acquireTokenSilent({
-      scopes,
-      account
-    });
-
-    const accessToken = tokenResponse.accessToken;
-    await fetchGraphData(accessToken);
-  } catch (e) {
-    renderError(e);
-    signInUI();
+    await msalInstance.loginRedirect({ scopes });
+  } catch (err) {
+    renderError(err);
   }
 }
 
@@ -95,17 +72,36 @@ async function fetchGraphData(token) {
     groupHTML += "</ul>";
 
     renderUser(profile, groupHTML, token);
-  } catch (e) {
-    renderError(e);
+  } catch (err) {
+    renderError(err);
   }
 }
 
-// Initial auth flow
+async function handleAuth() {
+  try {
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length === 0) {
+      signInButton();
+      return;
+    }
+
+    msalInstance.setActiveAccount(accounts[0]);
+
+    const tokenResp = await msalInstance.acquireTokenSilent({
+      scopes,
+      account: accounts[0]
+    });
+
+    await fetchGraphData(tokenResp.accessToken);
+  } catch (e) {
+    renderError(e);
+    signInButton();
+  }
+}
+
 msalInstance.handleRedirectPromise().then(async (response) => {
   if (response && response.account) {
     msalInstance.setActiveAccount(response.account);
   }
-  await attemptSilentSignIn();
-}).catch(err => {
-  renderError(err);
-});
+  await handleAuth();
+}).catch(err => renderError(err));

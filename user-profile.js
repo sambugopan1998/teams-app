@@ -2,158 +2,97 @@ const msalConfig = {
   auth: {
     clientId: "0486fae2-afeb-4044-ab8d-0c060910b0a8",
     authority: "https://login.microsoftonline.com/c06fea01-72bf-415d-ac1d-ac0382f8d39f",
-    redirectUri: "https://sambugopan1998.github.io/teams-app/hello.html",
-  },
-};
-
-const loginScopes = ["User.Read", "Directory.Read.All"];
-
-const state = {
-  msalInstance: new msal.PublicClientApplication(msalConfig),
-  accessToken: "",
-};
-
-function logToPage(message, isError = false) {
-  const el = document.getElementById("log-output");
-  const p = document.createElement("p");
-  p.textContent = message;
-  p.style.color = isError ? "red" : "green";
-  el.appendChild(p);
-}
-
-function isRunningInTeams() {
-  return typeof microsoftTeams !== "undefined";
-}
-
-async function waitForTeamsInit() {
-  return new Promise((resolve) => {
-    microsoftTeams.app.initialize().then(() => {
-      logToPage("✅ Teams SDK initialized");
-      resolve(true);
-    }).catch((e) => {
-      logToPage("❌ Teams SDK init failed: " + e.message, true);
-      resolve(false);
-    });
-  });
-}
-
-async function authenticate() {
-  await state.msalInstance.initialize();
-  const accounts = state.msalInstance.getAllAccounts();
-
-  if (accounts.length === 0) {
-    if (isRunningInTeams()) {
-      await waitForTeamsInit();
-      logToPage("🔁 Login redirect (Teams)");
-      return state.msalInstance.loginRedirect({ scopes: loginScopes });
-    } else {
-      try {
-        logToPage("🔁 Login popup (Browser)");
-        const loginResp = await state.msalInstance.loginPopup({ scopes: loginScopes });
-        state.msalInstance.setActiveAccount(loginResp.account);
-      } catch (err) {
-        logToPage("❌ Login popup failed: " + err.message, true);
-        return null;
-      }
-    }
-  } else {
-    state.msalInstance.setActiveAccount(accounts[0]);
-    logToPage("✅ Existing session");
+    redirectUri: window.location.href,
   }
+};
+
+const scopes = ["User.Read", "Directory.Read.All"];
+const msalInstance = new msal.PublicClientApplication(msalConfig);
+const app = document.querySelector(".app");
+
+function render(content) {
+  app.innerHTML = content;
+}
+
+function renderError(err) {
+  app.innerHTML += `<p style="color:red">❌ ${err.name || "Error"}: ${err.message || err}</p>`;
+}
+
+function renderUser(user, groupsHTML, token) {
+  app.innerHTML = `
+    <h2>Hello, ${user.displayName}</h2>
+    <p><strong>Access Token:</strong><br><small>${token}</small></p>
+    ${groupsHTML}
+  `;
+}
+
+function signInUI() {
+  render(`<button id="signin">Sign in</button>`);
+  document.getElementById("signin").addEventListener("click", () => signIn());
+}
+
+async function signIn() {
+  try {
+    await microsoftTeams.app.initialize();
+    microsoftTeams.authentication.authenticate({
+      url: window.location.href,
+      width: 600,
+      height: 535,
+      successCallback: () => attemptSilentSignIn(),
+      failureCallback: (err) => renderError(err),
+    });
+  } catch (e) {
+    renderError(e);
+  }
+}
+
+async function attemptSilentSignIn() {
+  const account = msalInstance.getAllAccounts()[0];
+  if (!account) return signInUI();
 
   try {
-    const tokenResp = await state.msalInstance.acquireTokenSilent({
-      scopes: loginScopes,
-      account: state.msalInstance.getActiveAccount()
+    const tokenResponse = await msalInstance.acquireTokenSilent({
+      scopes,
+      account
     });
-    state.accessToken = tokenResp.accessToken;
-    logToPage("✅ Token acquired silently");
-    return tokenResp.accessToken;
-  } catch (e) {
-    logToPage("⚠️ Silent token failed: " + e.message, true);
 
-    if (isRunningInTeams()) {
-      logToPage("🔁 Token redirect (Teams)");
-      return state.msalInstance.acquireTokenRedirect({ scopes: loginScopes });
-    } else {
-      try {
-        const popupResp = await state.msalInstance.acquireTokenPopup({ scopes: loginScopes });
-        state.accessToken = popupResp.accessToken;
-        logToPage("✅ Token acquired via popup");
-        return popupResp.accessToken;
-      } catch (popupErr) {
-        logToPage("❌ Token popup failed: " + popupErr.message, true);
-        return null;
-      }
-    }
+    const accessToken = tokenResponse.accessToken;
+    await fetchGraphData(accessToken);
+  } catch (e) {
+    signInUI(); // fallback if silent auth fails
   }
 }
 
 async function fetchGraphData(token) {
-  const headers = { Authorization: `Bearer ${token}` };
-
-  // 1. Profile
   try {
-    const profileRes = await fetch("https://graph.microsoft.com/v1.0/me", { headers });
+    const headers = { Authorization: `Bearer ${token}` };
+
+    const [profileRes, groupsRes] = await Promise.all([
+      fetch("https://graph.microsoft.com/v1.0/me", { headers }),
+      fetch("https://graph.microsoft.com/v1.0/me/memberOf", { headers }),
+    ]);
+
     const profile = await profileRes.json();
+    const groups = await groupsRes.json();
 
-    let html = "<h3>👤 Profile Info</h3><ul>";
-    for (const [key, value] of Object.entries(profile)) {
-      html += `<li><strong>${key}</strong>: ${value ?? "N/A"}</li>`;
-    }
-    html += "</ul>";
-    document.getElementById("user-info").innerHTML = html;
-  } catch (err) {
-    logToPage("❌ Profile fetch failed: " + err.message, true);
-  }
+    let groupHTML = "<h3>🔐 Roles / Groups</h3><ul>";
+    (groups.value || []).forEach(g => {
+      groupHTML += `<li>${g.displayName || g.id}</li>`;
+    });
+    groupHTML += "</ul>";
 
-  // 2. Photo
-  try {
-    const photoRes = await fetch("https://graph.microsoft.com/v1.0/me/photo/$value", { headers });
-    if (photoRes.ok) {
-      const blob = await photoRes.blob();
-      const imgURL = URL.createObjectURL(blob);
-      document.getElementById("user-info").insertAdjacentHTML("afterbegin",
-        `<h3>🖼️ Photo</h3><img src="${imgURL}" style="height:100px;border-radius:50%">`
-      );
-    } else {
-      logToPage("⚠️ No photo found");
-    }
-  } catch (err) {
-    logToPage("❌ Photo fetch failed: " + err.message, true);
-  }
-
-  // 3. Groups / Roles
-  try {
-    const groupRes = await fetch("https://graph.microsoft.com/v1.0/me/memberOf", { headers });
-    if (groupRes.ok) {
-      const groups = await groupRes.json();
-      let rolesHTML = "<h3>🔐 Roles / Groups</h3><ul>";
-      groups.value.forEach(g => {
-        rolesHTML += `<li><strong>${g['@odata.type']}</strong>: ${g.displayName || "Unnamed"}</li>`;
-      });
-      rolesHTML += "</ul>";
-      document.getElementById("user-info").insertAdjacentHTML("beforeend", rolesHTML);
-    } else {
-      logToPage("⚠️ Group fetch failed");
-    }
-  } catch (err) {
-    logToPage("❌ Roles fetch failed: " + err.message, true);
+    renderUser(profile, groupHTML, token);
+  } catch (e) {
+    renderError(e);
   }
 }
 
-state.msalInstance.handleRedirectPromise().then(async (response) => {
+// Entry point
+msalInstance.handleRedirectPromise().then(async (response) => {
   if (response && response.account) {
-    state.msalInstance.setActiveAccount(response.account);
-    logToPage("✅ Redirect login success");
+    msalInstance.setActiveAccount(response.account);
   }
-
-  const token = await authenticate();
-  if (token) {
-    document.getElementById("access-token").textContent = token;
-    await fetchGraphData(token);
-  }
-}).catch((err) => {
-  document.getElementById("user-info").innerHTML = 
-    `<p style="color:red;">❌ Auth Error: ${err.name} — ${err.message}</p>`;
+  await attemptSilentSignIn();
+}).catch(err => {
+  renderError(err);
 });

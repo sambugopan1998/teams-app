@@ -1,75 +1,21 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Teams Auth Tab</title>
-  <script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
+  <title>Teams + Graph</title>
+    <script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
   <script src="https://res.cdn.office.net/teams-js/2.16.0/js/MicrosoftTeams.min.js"></script>
-  <style>
-    body { font-family: sans-serif; padding: 20px; background: #111; color: #fff; }
+<style>
+    body { font-family: sans-serif; padding: 20px; background-color: #111; color: #fff; }
     .app { margin-top: 20px; }
-    button { padding: 10px 20px; font-size: 16px; }
-    pre, textarea { background: #222; color: #0f0; padding: 10px; width: 100%; }
+    button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+    textarea { width: 100%; height: 100px; }
+    pre { white-space: pre-wrap; word-break: break-word; }
   </style>
 </head>
 <body>
-  <h2>🔐 Teams Auth Demo</h2>
+  <h2>🔐 Access Token</h2>
   <div class="app">Loading...</div>
-  <script type="module">
-    const app = document.querySelector(".app");
-
-    function render(content) {
-      app.innerHTML = content;
-    }
-
-    function renderError(error) {
-      const errMsg = error?.message || JSON.stringify(error) || "Unknown error";
-      app.innerHTML += `<div style="color: red;"><strong>❌ Error:</strong><pre>${errMsg}</pre></div>`;
-    }
-
-    function renderUser(token, profile, groups) {
-      let html = `<h3>👤 Hello ${profile.displayName}</h3><ul>`;
-      for (const [key, val] of Object.entries(profile)) {
-        html += `<li><strong>${key}</strong>: ${val}</li>`;
-      }
-      html += `</ul><h4>🔐 Groups</h4><ul>`;
-      (groups.value || []).forEach(g => {
-        html += `<li>${g.displayName || g.id}</li>`;
-      });
-      html += `</ul><h4>🔑 Token</h4><textarea readonly>${token}</textarea>`;
-      app.innerHTML = html;
-    }
-
-    async function fetchGraphData(token) {
-      try {
-        const headers = { Authorization: `Bearer ${token}` };
-        const profile = await fetch("https://graph.microsoft.com/v1.0/me", { headers }).then(r => r.json());
-        const groups = await fetch("https://graph.microsoft.com/v1.0/me/memberOf", { headers }).then(r => r.json());
-        renderUser(token, profile, groups);
-      } catch (e) {
-        renderError(e);
-      }
-    }
-
-    function signIn() {
-      microsoftTeams.app.initialize().then(() => {
-        microsoftTeams.authentication.authenticate({
-          url: window.location.origin + "/auth.html",
-          width: 600,
-          height: 535,
-          successCallback: (token) => {
-            fetchGraphData(token);
-          },
-          failureCallback: (err) => {
-            renderError(err);
-          }
-        });
-      });
-    }
-
-    // App starts here
-    render(`<button id="signin">🔐 Sign in with Microsoft</button>`);
-    document.getElementById("signin").onclick = signIn;
-  </script>
-</body>
-</html>
+   <script type="module" src="./user-profile.js" defer></script>
+   </body>
+   </html>

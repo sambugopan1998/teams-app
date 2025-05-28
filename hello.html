@@ -3,13 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <title>Teams + Graph</title>
+  <script src="https://statics.teams.cdn.office.net/sdk/v1.12.0/js/MicrosoftTeams.min.js"></script>
   <script src="https://alcdn.msauth.net/browser/2.37.0/js/msal-browser.min.js"></script>
-  <script type="module" src="./user-profile.js" defer></script>
 </head>
 <body>
-  <h2>User Details</h2>
-  <div id="user-info">Loading...</div>
-  <h3>Access Token</h3>
+  <h2>Access Token</h2>
   <pre id="access-token">Loading...</pre>
+  <div id="user-info"></div>
+
+   <script type="module" src="./user-profile.js" defer></script>
 </body>
 </html>

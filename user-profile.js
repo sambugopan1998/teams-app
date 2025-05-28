@@ -1,4 +1,3 @@
-// app.js
 const msalConfig = {
   auth: {
     clientId: "0486fae2-afeb-4044-ab8d-0c060910b0a8",
@@ -10,47 +9,35 @@ const msalConfig = {
 const msalInstance = new msal.PublicClientApplication(msalConfig);
 const loginRequest = { scopes: ["User.Read", "Directory.Read.All"] };
 
-// Utility to check if running inside Teams iframe
 function isRunningInTeams() {
   return window.self !== window.top || navigator.userAgent.includes("Teams");
 }
 
 async function acquireAccessToken() {
   const accounts = msalInstance.getAllAccounts();
+
   if (accounts.length === 0) {
     if (isRunningInTeams()) {
-      msalInstance.loginRedirect(loginRequest); // Teams: use redirect
-      return null; // stop execution
+      await msalInstance.loginRedirect(loginRequest);
+      return null;
     } else {
-      const loginResponse = await msalInstance.loginPopup(loginRequest); // Browser: use popup
+      const loginResponse = await msalInstance.loginPopup(loginRequest);
       msalInstance.setActiveAccount(loginResponse.account);
     }
   } else {
     msalInstance.setActiveAccount(accounts[0]);
   }
 
-  try {
-    const tokenResponse = await msalInstance.acquireTokenSilent({
-      ...loginRequest,
-      account: msalInstance.getActiveAccount(),
-    });
-    return tokenResponse.accessToken;
-  } catch (error) {
-    // fallback to popup if needed (e.g., consent not yet given)
-    if (!isRunningInTeams()) {
-      const tokenResponse = await msalInstance.acquireTokenPopup(loginRequest);
-      return tokenResponse.accessToken;
-    } else {
-      document.getElementById("user-info").innerHTML =
-        `❌ Teams Tab Error: ${error.name} — ${error.message}`;
-      throw error;
-    }
-  }
+  const tokenResponse = await msalInstance.acquireTokenSilent({
+    ...loginRequest,
+    account: msalInstance.getActiveAccount()
+  });
+
+  return tokenResponse.accessToken;
 }
 
-// MSAL redirect flow + data load
 msalInstance.handleRedirectPromise().then(async (response) => {
-  if (response && response.account) {
+  if (response?.account) {
     msalInstance.setActiveAccount(response.account);
   }
 
@@ -60,7 +47,7 @@ msalInstance.handleRedirectPromise().then(async (response) => {
   document.getElementById("access-token").textContent = token;
   const headers = { Authorization: `Bearer ${token}` };
 
-  // 1. Get profile
+  // Profile Info
   const profileRes = await fetch("https://graph.microsoft.com/v1.0/me", { headers });
   const user = await profileRes.json();
 
@@ -71,32 +58,31 @@ msalInstance.handleRedirectPromise().then(async (response) => {
   html += "</ul>";
   document.getElementById("user-info").innerHTML = html;
 
-  // 2. Get photo
+  // Profile Photo
   try {
     const photoRes = await fetch("https://graph.microsoft.com/v1.0/me/photo/$value", { headers });
     if (photoRes.ok) {
       const blob = await photoRes.blob();
-      const url = URL.createObjectURL(blob);
-      document.getElementById("user-info").insertAdjacentHTML("afterbegin",
-        `<h3>🖼️ Photo</h3><img src="${url}" style="height:100px;border-radius:50%;">`);
+      const imgURL = URL.createObjectURL(blob);
+      const imgTag = `<h3>🖼️ Photo</h3><img src="${imgURL}" style="height:100px;border-radius:50%">`;
+      document.getElementById("user-info").insertAdjacentHTML("afterbegin", imgTag);
     }
   } catch (err) {
-    console.warn("No profile photo.");
+    console.warn("No photo available.");
   }
 
-  // 3. Get roles / groups
-  const groupRes = await fetch("https://graph.microsoft.com/v1.0/me/memberOf", { headers });
-  if (groupRes.ok) {
-    const groups = await groupRes.json();
-    let rolesHTML = "<h3>🔐 Roles / Groups</h3><ul>";
-    groups.value.forEach(g => {
-      rolesHTML += `<li><strong>${g['@odata.type']}</strong>: ${g.displayName || "Unnamed"}</li>`;
+  // Group Memberships
+  const roleRes = await fetch("https://graph.microsoft.com/v1.0/me/memberOf", { headers });
+  if (roleRes.ok) {
+    const roles = await roleRes.json();
+    let roleHTML = "<h3>🔐 Roles / Groups</h3><ul>";
+    roles.value.forEach(entry => {
+      roleHTML += `<li><strong>${entry["@odata.type"]}</strong>: ${entry.displayName || "Unnamed"}</li>`;
     });
-    rolesHTML += "</ul>";
-    document.getElementById("user-info").insertAdjacentHTML("beforeend", rolesHTML);
+    roleHTML += "</ul>";
+    document.getElementById("user-info").insertAdjacentHTML("beforeend", roleHTML);
   }
 }).catch(err => {
-  console.error("Auth flow failed", err);
-  document.getElementById("user-info").innerHTML =
-    `❌ Auth Error: ${err.name} — ${err.message}`;
+  console.error("Auth error:", err);
+  document.getElementById("user-info").textContent = `❌ ${err.name} — ${err.message}`;
 });

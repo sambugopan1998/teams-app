@@ -14,26 +14,38 @@ function render(content) {
   app.innerHTML = content;
 }
 
-function renderError(err) {
-  app.innerHTML += `<p style="color:red">❌ ${err.name || "Error"}: ${err.message || err}</p>`;
+function renderError(error) {
+  const errMsg = `
+    <div style="color: red; margin-top: 1em;">
+      <h4>❌ Error:</h4>
+      <pre>${JSON.stringify(error, null, 2)}</pre>
+    </div>`;
+  app.innerHTML += errMsg;
 }
 
 function renderUser(user, groupsHTML, token) {
+  let userDetails = "<h3>👤 User Profile</h3><ul>";
+  for (const [key, value] of Object.entries(user)) {
+    userDetails += `<li><strong>${key}</strong>: ${value || "N/A"}</li>`;
+  }
+  userDetails += "</ul>";
+
   app.innerHTML = `
-    <h2>Hello, ${user.displayName}</h2>
-    <p><strong>Access Token:</strong><br><small>${token}</small></p>
-    ${groupsHTML}
+    ${userDetails}
+    <h3>🔐 Groups</h3>${groupsHTML}
+    <h4>🪪 Access Token</h4><textarea style="width:100%;height:100px">${token}</textarea>
   `;
 }
 
 function signInUI() {
-  render(`<button id="signin">Sign in</button>`);
-  document.getElementById("signin").addEventListener("click", () => signIn());
+  render(`<button id="signin">🔐 Sign in with Microsoft</button>`);
+  document.getElementById("signin").addEventListener("click", signIn);
 }
 
 async function signIn() {
   try {
     await microsoftTeams.app.initialize();
+
     microsoftTeams.authentication.authenticate({
       url: window.location.href,
       width: 600,
@@ -59,7 +71,8 @@ async function attemptSilentSignIn() {
     const accessToken = tokenResponse.accessToken;
     await fetchGraphData(accessToken);
   } catch (e) {
-    signInUI(); // fallback if silent auth fails
+    renderError(e);
+    signInUI();
   }
 }
 
@@ -75,7 +88,7 @@ async function fetchGraphData(token) {
     const profile = await profileRes.json();
     const groups = await groupsRes.json();
 
-    let groupHTML = "<h3>🔐 Roles / Groups</h3><ul>";
+    let groupHTML = "<ul>";
     (groups.value || []).forEach(g => {
       groupHTML += `<li>${g.displayName || g.id}</li>`;
     });
@@ -87,7 +100,7 @@ async function fetchGraphData(token) {
   }
 }
 
-// Entry point
+// Initial auth flow
 msalInstance.handleRedirectPromise().then(async (response) => {
   if (response && response.account) {
     msalInstance.setActiveAccount(response.account);

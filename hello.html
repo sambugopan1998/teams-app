@@ -4,12 +4,15 @@
   <meta charset="UTF-8" />
   <title>Teams + Graph</title>
   <script src="https://statics.teams.cdn.office.net/sdk/v1.12.0/js/MicrosoftTeams.min.js"></script>
-  <script src="https://alcdn.msauth.net/browser/2.37.0/js/msal-browser.min.js"></script>
 </head>
 <body>
-  <h2>Access Token</h2>
-  <pre id="access-token">Loading...</pre>
-  <div id="user-info"></div>
+   <h2>🔐 Access Token</h2>
+  <pre id="access-token" style="background:#eee;padding:10px;"></pre>
+
+  <div id="user-info" style="margin-top:20px;"></div>
+
+  <div id="log-output" style="margin-top:30px; padding:10px; border-top:1px solid #ccc;"></div>
+    <script src="https://alcdn.msauth.net/browser/2.37.0/js/msal-browser.min.js"></script>
 
    <script type="module" src="./user-profile.js" defer></script>
 </body>

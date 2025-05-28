@@ -72,7 +72,10 @@ async function authenticate() {
   } catch (e) {
     logToPage("⚠️ Silent token failed: " + e.message, true);
 
-    if (!isRunningInTeams()) {
+    if (isRunningInTeams()) {
+      logToPage("🔁 Token redirect (Teams)");
+      return state.msalInstance.acquireTokenRedirect({ scopes: loginScopes });
+    } else {
       try {
         const popupResp = await state.msalInstance.acquireTokenPopup({ scopes: loginScopes });
         state.accessToken = popupResp.accessToken;
@@ -82,9 +85,6 @@ async function authenticate() {
         logToPage("❌ Token popup failed: " + popupErr.message, true);
         return null;
       }
-    } else {
-      logToPage("🔁 Token redirect (Teams)");
-      return state.msalInstance.acquireTokenRedirect({ scopes: loginScopes });
     }
   }
 }

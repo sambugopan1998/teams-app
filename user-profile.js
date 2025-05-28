@@ -47,7 +47,9 @@ function signInButton() {
 async function signIn() {
   try {
     await microsoftTeams.app.initialize();
-    await msalInstance.loginRedirect({ scopes });
+    const response = await msalInstance.loginPopup({ scopes });
+    msalInstance.setActiveAccount(response.account);
+    await handleAuth();
   } catch (err) {
     renderError(err);
   }

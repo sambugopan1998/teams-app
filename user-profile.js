@@ -2,7 +2,7 @@ const msalConfig = {
   auth: {
     clientId: "0486fae2-afeb-4044-ab8d-0c060910b0a8",
     authority: "https://login.microsoftonline.com/c06fea01-72bf-415d-ac1d-ac0382f8d39f",
-    redirectUri: window.location.href,
+    redirectUri:'https://sambugopan1998.github.io/teams-app/hello.html',
   }
 };
 
@@ -47,8 +47,12 @@ function signInButton() {
 async function signIn() {
   try {
     await microsoftTeams.app.initialize();
-    const response = await msalInstance.loginPopup({ scopes });
-    msalInstance.setActiveAccount(response.account);
+
+    const isInIframe = window.parent !== window;
+    const loginMethod = isInIframe ? msalInstance.loginPopup : msalInstance.loginRedirect;
+
+    const loginResponse = await loginMethod.call(msalInstance, { scopes });
+    msalInstance.setActiveAccount(loginResponse.account);
     await handleAuth();
   } catch (err) {
     renderError(err);

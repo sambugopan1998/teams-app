@@ -65,49 +65,6 @@ async function signIn() {
     renderError(e);
   }
 }
-// Fetches token using MSAL (client-side Graph token)
-async function getClientSideToken() {
-  try {
-    const account = msalInstance.getActiveAccount();
-    if (!account) throw new Error("No active account. Please sign in first.");
-
-    const response = await msalInstance.acquireTokenSilent({
-      scopes,
-      account
-    });
-
-    console.log("✅ MSAL token:", response.accessToken);
-    return response.accessToken;
-  } catch (err) {
-    console.error("❌ MSAL Token Error", err);
-    throw err;
-  }
-}
-
-// Fetches Teams SSO token using Teams SDK (if app is running inside Teams)
-async function getAuthToken() {
-  try {
-    await microsoftTeams.app.initialize();
-
-    return new Promise((resolve, reject) => {
-      microsoftTeams.authentication.getAuthToken({
-        successCallback: (token) => {
-          console.log("✅ Teams SSO Token:", token);
-          resolve(token);
-        },
-        failureCallback: (error) => {
-          console.error("❌ getAuthToken failed:", error);
-          reject(error);
-        }
-      });
-    });
-  } catch (err) {
-    console.error("❌ Teams Auth SDK error", err);
-    throw err;
-  }
-}
-
-
 async function fetchGraphData(token) {
   try {
     const headers = { Authorization: `Bearer ${token}` };

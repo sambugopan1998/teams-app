@@ -1,141 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-  <meta charset="UTF-8">
-  <title>Teams SSO Example</title>
-  <script src="https://res.cdn.office.net/teams-js/2.0.0/js/MicrosoftTeams.min.js"></script>
-  <script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
+  <meta charset="UTF-8" />
+  <title>Teams + Graph</title>
+    <script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
+  <script src="https://res.cdn.office.net/teams-js/2.16.0/js/MicrosoftTeams.min.js"></script>
+<style>
+    body { font-family: sans-serif; padding: 20px; background-color: #111; color: #fff; }
+    .app { margin-top: 20px; }
+    button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+    textarea { width: 100%; height: 100px; }
+    pre { white-space: pre-wrap; word-break: break-word; }
+  </style>
 </head>
-
 <body>
-  <h1>Microsoft Teams SSO with Graph API</h1>
-  <h3>User Profile, Roles, Groups, and Access Token</h3>
-
-  <div id="user-info"></div>
-  <div id="roles-info"></div>
-  <div id="user-groups"></div>
-  <div id="access-token-info"></div>
-
-  <script>
-    // MSAL.js configuration
-    console.log(window.location.origin);
-    const msalConfig = {
-      auth: {
-        clientId: "0486fae2-afeb-4044-ab8d-0c060910b0a8",
-        authority: "https://login.microsoftonline.com/c06fea01-72bf-415d-ac1d-ac0382f8d39f",
-        redirectUri: window.location.href
-      }
-    };
-
-    const msalInstance = new msal.PublicClientApplication(msalConfig);
-
-    // Initialize Teams SDK and get SSO token
-    microsoftTeams.app.initialize().then(() => {
-      microsoftTeams.authentication.getAuthToken({
-        successCallback: function (token) {
-          console.log("SSO Token:", token);
-          document.getElementById('access-token-info').innerHTML = `<p><strong>SSO Token:</strong> ${token}</p>`;
-          acquireGraphToken(token);
-        },
-        failureCallback: function (error) {
-          console.error("Error getting SSO token:", error);
-        }
-      });
-    });
-
-    // Use MSAL.js to acquire access token for Graph API using the SSO token
-    function acquireGraphToken(ssoToken) {
-      const request = {
-        oboAssertion: ssoToken, // Teams SSO token
-        scopes: ["User.Read", "Group.Read.All", "Directory.Read.All"] // Scopes for Graph API
-      };
-
-      msalInstance.acquireTokenOnBehalfOf(request).then((response) => {
-        if (response.accessToken) {
-          console.log("Access Token:", response.accessToken);
-          document.getElementById('access-token-info').innerHTML += `
-            <p><strong>Access Token:</strong> ${response.accessToken}</p>
-          `;
-          // Fetch user profile, roles, and groups
-          getUserData(response.accessToken);
-          getUserRoles(response.accessToken);
-          getUserGroups(response.accessToken);
-        }
-      }).catch((error) => {
-        console.error("Error acquiring Graph token:", error);
-      });
-    }
-
-    // Fetch User Profile (e.g., name, email)
-    function getUserData(accessToken) {
-      fetch("https://graph.microsoft.com/v1.0/me", {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${accessToken}`,
-          "Content-Type": "application/json"
-        }
-      })
-        .then(response => response.json())
-        .then(data => {
-          console.log("User Profile:", data);
-          document.getElementById('user-info').innerHTML = `
-          <p><strong>Name:</strong> ${data.displayName}</p>
-          <p><strong>Email:</strong> ${data.mail || 'No email found'}</p>
-          <p><strong>ID:</strong> ${data.id}</p>
-        `;
-        })
-        .catch(error => {
-          console.error("Error fetching user data:", error);
-        });
-    }
-
-    // Fetch User Roles (e.g., roles in Azure AD)
-    function getUserRoles(accessToken) {
-      fetch("https://graph.microsoft.com/v1.0/me/memberOf", {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${accessToken}`,
-          "Content-Type": "application/json"
-        }
-      })
-        .then(response => response.json())
-        .then(data => {
-          console.log("User Roles:", data);
-          let rolesHTML = "<p><strong>Roles:</strong></p>";
-          data.value.forEach(role => {
-            rolesHTML += `<p>${role.displayName || 'No role display name'}</p>`;
-          });
-          document.getElementById('roles-info').innerHTML = rolesHTML;
-        })
-        .catch(error => {
-          console.error("Error fetching roles:", error);
-        });
-    }
-
-    // Fetch User Groups (e.g., Office 365 groups)
-    function getUserGroups(accessToken) {
-      fetch("https://graph.microsoft.com/v1.0/me/memberOf", {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${accessToken}`,
-          "Content-Type": "application/json"
-        }
-      })
-        .then(response => response.json())
-        .then(data => {
-          console.log("User Groups:", data);
-          let groupsHTML = "<p><strong>Groups:</strong></p>";
-          data.value.forEach(group => {
-            groupsHTML += `<p>${group.displayName || 'No group display name'}</p>`;
-          });
-          document.getElementById('user-groups').innerHTML = groupsHTML;
-        })
-        .catch(error => {
-          console.error("Error fetching groups:", error);
-        });
-    }
-  </script>
-</body>
-
-</html>
+  <h2>🔐 Access Token</h2>
+  <div class="app">Loading...</div>
+   <script type="module" src="./user-profile.js" defer></script>
+   </body>
+   </html>

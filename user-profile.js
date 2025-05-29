@@ -57,13 +57,6 @@ async function signIn() {
   } catch (err) {
     renderError(err);
   }
-  try {
-    const msalToken = await getClientSideToken();
-    const ssoToken = await getAuthToken();
-    console.log("Both tokens acquired.");
-  } catch (e) {
-    renderError(e);
-  }
 }
 async function fetchGraphData(token) {
   try {

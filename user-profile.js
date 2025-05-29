@@ -1,3 +1,6 @@
+import * as msal from "https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.11.0/+esm";
+
+// Replace with your actual values
 const msalConfig = {
   auth: {
     clientId: "0486fae2-afeb-4044-ab8d-0c060910b0a8",
@@ -6,7 +9,10 @@ const msalConfig = {
   }
 };
 
-const scopes = ["User.Read", "Directory.Read.All"];
+// Scopes
+const apiScopes = ["api://40306a83-ec51-4935-b95e-485d3804873c/read"]; // App B: custom API
+const graphScopes = ["User.Read"]; // Microsoft Graph
+
 const msalInstance = new msal.PublicClientApplication(msalConfig);
 const app = document.querySelector(".app");
 
@@ -23,22 +29,6 @@ function renderError(error) {
     </div>`;
 }
 
-function renderUser(user, groupsHTML, token) {
-  let userDetails = "<h3>👤 User Profile</h3><ul>";
-  for (const [key, value] of Object.entries(user)) {
-    userDetails += `<li><strong>${key}</strong>: ${value || "N/A"}</li>`;
-  }
-  userDetails += "</ul>";
-
-  app.innerHTML = `
-    ${userDetails}
-    <h3>🔐 Roles / Groups</h3>
-    ${groupsHTML}
-    <h3>🔑 Access Token</h3>
-    <textarea readonly>${token}</textarea>
-  `;
-}
-
 function signInButton() {
   render(`<button id="signin">🔐 Sign in with Microsoft</button>`);
   document.getElementById("signin").onclick = signIn;
@@ -46,72 +36,34 @@ function signInButton() {
 
 async function signIn() {
   try {
-    await microsoftTeams.app.initialize();
-
-    const isInIframe = window.parent !== window;
-    const loginMethod = isInIframe ? msalInstance.loginPopup : msalInstance.loginRedirect;
-
-    const loginResponse = await loginMethod.call(msalInstance, { scopes });
+    const loginResponse = await msalInstance.loginPopup({ scopes: apiScopes });
     msalInstance.setActiveAccount(loginResponse.account);
-    await handleAuth();
+
+    // Token for App B
+    const apiTokenResponse = await msalInstance.acquireTokenSilent({
+      scopes: apiScopes,
+      account: loginResponse.account
+    });
+    console.log("✅ Token for App B:", apiTokenResponse.accessToken);
+
+    // Token for Microsoft Graph
+    const graphTokenResponse = await msalInstance.acquireTokenSilent({
+      scopes: graphScopes,
+      account: loginResponse.account
+    });
+    console.log("✅ Microsoft Graph Token:", graphTokenResponse.accessToken);
+
+    // Call Microsoft Graph
+    await fetchGraphData(graphTokenResponse.accessToken);
+
   } catch (err) {
     renderError(err);
   }
-  try {
-    const msalToken = await getClientSideToken();
-    const ssoToken = await getAuthToken();
-    console.log("Both tokens acquired.");
-  } catch (e) {
-    renderError(e);
-  }
 }
-// Fetches token using MSAL (client-side Graph token)
-async function getClientSideToken() {
-  try {
-    const account = msalInstance.getActiveAccount();
-    if (!account) throw new Error("No active account. Please sign in first.");
-
-    const response = await msalInstance.acquireTokenSilent({
-      scopes,
-      account
-    });
-
-    console.log("✅ MSAL token:", response.accessToken);
-    return response.accessToken;
-  } catch (err) {
-    console.error("❌ MSAL Token Error", err);
-    throw err;
-  }
-}
-
-// Fetches Teams SSO token using Teams SDK (if app is running inside Teams)
-async function getAuthToken() {
-  try {
-    await microsoftTeams.app.initialize();
-
-    return new Promise((resolve, reject) => {
-      microsoftTeams.authentication.getAuthToken({
-        successCallback: (token) => {
-          console.log("✅ Teams SSO Token:", token);
-          resolve(token);
-        },
-        failureCallback: (error) => {
-          console.error("❌ getAuthToken failed:", error);
-          reject(error);
-        }
-      });
-    });
-  } catch (err) {
-    console.error("❌ Teams Auth SDK error", err);
-    throw err;
-  }
-}
-
 
 async function fetchGraphData(token) {
   try {
     const headers = { Authorization: `Bearer ${token}` };
-
     const [profileRes, groupsRes] = await Promise.all([
       fetch("https://graph.microsoft.com/v1.0/me", { headers }),
       fetch("https://graph.microsoft.com/v1.0/me/memberOf", { headers }),
@@ -120,37 +72,21 @@ async function fetchGraphData(token) {
     const profile = await profileRes.json();
     const groups = await groupsRes.json();
 
-    let groupHTML = "<ul>";
+    let userDetails = "<h3>👤 User Profile</h3><ul>";
+    for (const [key, value] of Object.entries(profile)) {
+      userDetails += `<li><strong>${key}</strong>: ${value || "N/A"}</li>`;
+    }
+    userDetails += "</ul>";
+
+    let groupHTML = "<h3>🔐 Groups</h3><ul>";
     (groups.value || []).forEach(g => {
       groupHTML += `<li>${g.displayName || g.id}</li>`;
     });
     groupHTML += "</ul>";
 
-    renderUser(profile, groupHTML, token);
+    render(`${userDetails}${groupHTML}<h3>🎯 Done</h3>`);
   } catch (err) {
     renderError(err);
-  }
-}
-
-async function handleAuth() {
-  try {
-    const accounts = msalInstance.getAllAccounts();
-    if (accounts.length === 0) {
-      signInButton();
-      return;
-    }
-
-    msalInstance.setActiveAccount(accounts[0]);
-
-    const tokenResp = await msalInstance.acquireTokenSilent({
-      scopes,
-      account: accounts[0]
-    });
-
-    await fetchGraphData(tokenResp.accessToken);
-  } catch (e) {
-    renderError(e);
-    signInButton();
   }
 }
 
@@ -158,5 +94,11 @@ msalInstance.handleRedirectPromise().then(async (response) => {
   if (response && response.account) {
     msalInstance.setActiveAccount(response.account);
   }
-  await handleAuth();
+  const accounts = msalInstance.getAllAccounts();
+  if (accounts.length > 0) {
+    msalInstance.setActiveAccount(accounts[0]);
+    signIn(); // auto continue if already logged in
+  } else {
+    signInButton();
+  }
 }).catch(err => renderError(err));

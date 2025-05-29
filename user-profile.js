@@ -8,7 +8,7 @@ const msalConfig = {
   }
 };
 
-const graphScopes = ["User.Read", "Directory.Read.All"];
+const graphScopes = ["User.Read"];
 const msalInstance = new msal.PublicClientApplication(msalConfig);
 const app = document.querySelector(".app");
 
@@ -25,44 +25,20 @@ function renderError(error) {
     </div>`;
 }
 
-function renderUser(user, groupsHTML, token) {
-  let userDetails = "<h3>👤 User Profile</h3><ul>";
+function renderUser(user, token) {
+  let html = "<h3>👤 User Profile</h3><ul>";
   for (const [key, value] of Object.entries(user)) {
-    userDetails += `<li><strong>${key}</strong>: ${value || "N/A"}</li>`;
+    html += `<li><strong>${key}</strong>: ${value || "N/A"}</li>`;
   }
-  userDetails += "</ul>";
-
-  app.innerHTML = `
-    ${userDetails}
-    <h3>🔐 Roles / Groups</h3>
-    ${groupsHTML}
-    <h3>🔑 Access Token</h3>
-    <textarea readonly>${token}</textarea>
-  `;
+  html += `</ul><h3>🔑 Access Token</h3><textarea readonly>${token}</textarea>`;
+  render(html);
 }
 
 async function fetchGraphData(token) {
-  try {
-    const headers = { Authorization: `Bearer ${token}` };
-
-    const [profileRes, groupsRes] = await Promise.all([
-      fetch("https://graph.microsoft.com/v1.0/me", { headers }),
-      fetch("https://graph.microsoft.com/v1.0/me/memberOf", { headers }),
-    ]);
-
-    const profile = await profileRes.json();
-    const groups = await groupsRes.json();
-
-    let groupHTML = "<ul>";
-    (groups.value || []).forEach(g => {
-      groupHTML += `<li>${g.displayName || g.id}</li>`;
-    });
-    groupHTML += "</ul>";
-
-    renderUser(profile, groupHTML, token);
-  } catch (err) {
-    renderError(err);
-  }
+  const headers = { Authorization: `Bearer ${token}` };
+  const profileRes = await fetch("https://graph.microsoft.com/v1.0/me", { headers });
+  const profile = await profileRes.json();
+  renderUser(profile, token);
 }
 
 (async () => {
@@ -70,34 +46,30 @@ async function fetchGraphData(token) {
     await msalInstance.initialize();
     await microsoftTeams.app.initialize();
 
+    // Get Teams SSO token (identity)
     microsoftTeams.authentication.getAuthToken({
-      successCallback: async (ssoToken) => {
-        console.log("✅ Teams SSO Token:", ssoToken);
+      successCallback: async () => {
+        console.log("✅ Teams SSO Token acquired");
 
+        // Use MSAL to get Graph token
         const accounts = msalInstance.getAllAccounts();
-        if (accounts.length > 0) {
-          msalInstance.setActiveAccount(accounts[0]);
-
-          try {
-            const graphToken = await msalInstance.acquireTokenSilent({
-              scopes: graphScopes,
-              account: accounts[0]
-            });
-
-            console.log("✅ Graph token acquired silently");
-            await fetchGraphData(graphToken.accessToken);
-          } catch (silentErr) {
-            renderError("⚠️ Silent token failed. User must consent via popup or backend exchange.");
-          }
-        } else {
-          renderError("🛑 No MSAL account found. You need to sign in via backend or handle consent.");
+        if (accounts.length === 0) {
+          renderError("No MSAL account. Please sign in via Azure AD once.");
+          return;
         }
+
+        const graphTokenResponse = await msalInstance.acquireTokenSilent({
+          scopes: graphScopes,
+          account: accounts[0]
+        });
+
+        console.log("✅ Microsoft Graph Token:", graphTokenResponse.accessToken);
+        await fetchGraphData(graphTokenResponse.accessToken);
       },
       failureCallback: (error) => {
-        renderError("🛑 Teams SSO failed: " + error);
+        renderError("Teams SSO failed: " + error);
       }
     });
-
   } catch (err) {
     renderError(err);
   }

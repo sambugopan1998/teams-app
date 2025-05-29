@@ -1,16 +1,15 @@
 import * as msal from "https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.11.0/+esm";
 
-// Replace with your actual values
+// Replace with your values
 const msalConfig = {
   auth: {
-    clientId: "0486fae2-afeb-4044-ab8d-0c060910b0a8", // App A: SPA Client ID
-    authority: "https://login.microsoftonline.com/c06fea01-72bf-415d-ac1d-ac0382f8d39f", // Tenant ID
-    redirectUri: 'https://sambugopan1998.github.io/teams-app/hello.html', // Must be registered in App A
+    clientId: "0486fae2-afeb-4044-ab8d-0c060910b0a8", // App A client ID
+    authority: "https://login.microsoftonline.com/c06fea01-72bf-415d-ac1d-ac0382f8d39f",
+    redirectUri: "https://sambugopan1998.github.io/teams-app/hello.html" // Must match Azure + manifest
   }
 };
 
-// Scopes
-const apiScopes = ["api://40306a83-ec51-4935-b95e-485d3804873c/read"]; // App B: Exposed scope
+const apiScopes = ["api://40306a83-ec51-4935-b95e-485d3804873c/read"]; // App B scope
 const graphScopes = ["User.Read"]; // Microsoft Graph
 
 const msalInstance = new msal.PublicClientApplication(msalConfig);
@@ -39,21 +38,18 @@ async function signIn() {
     const loginResponse = await msalInstance.loginPopup({ scopes: apiScopes });
     msalInstance.setActiveAccount(loginResponse.account);
 
-    // Token for App B
     const apiTokenResponse = await msalInstance.acquireTokenSilent({
       scopes: apiScopes,
       account: loginResponse.account
     });
-    console.log("✅ Token for App B:", apiTokenResponse.accessToken);
+    console.log("✅ App B Token:", apiTokenResponse.accessToken);
 
-    // Token for Microsoft Graph
     const graphTokenResponse = await msalInstance.acquireTokenSilent({
       scopes: graphScopes,
       account: loginResponse.account
     });
-    console.log("✅ Microsoft Graph Token:", graphTokenResponse.accessToken);
+    console.log("✅ Graph Token:", graphTokenResponse.accessToken);
 
-    // Call Microsoft Graph
     await fetchGraphData(graphTokenResponse.accessToken);
 
   } catch (err) {
@@ -66,7 +62,7 @@ async function fetchGraphData(token) {
     const headers = { Authorization: `Bearer ${token}` };
     const [profileRes, groupsRes] = await Promise.all([
       fetch("https://graph.microsoft.com/v1.0/me", { headers }),
-      fetch("https://graph.microsoft.com/v1.0/me/memberOf", { headers }),
+      fetch("https://graph.microsoft.com/v1.0/me/memberOf", { headers })
     ]);
 
     const profile = await profileRes.json();
@@ -90,10 +86,13 @@ async function fetchGraphData(token) {
   }
 }
 
-// 🔁 Wrap everything in IIFE to await initialization before proceeding
 (async () => {
   try {
-    await msalInstance.initialize(); // ✅ Initialize first
+    console.log("Initializing MSAL...");
+    await msalInstance.initialize(); // ✅ MSAL first
+
+    console.log("Initializing Teams...");
+    await microsoftTeams.app.initialize(); // ✅ Teams SDK next
 
     const response = await msalInstance.handleRedirectPromise();
 
@@ -104,9 +103,9 @@ async function fetchGraphData(token) {
     const accounts = msalInstance.getAllAccounts();
     if (accounts.length > 0) {
       msalInstance.setActiveAccount(accounts[0]);
-      signIn(); // Auto sign in
+      signIn();
     } else {
-      signInButton(); // Show sign-in button
+      signInButton();
     }
   } catch (err) {
     renderError(err);

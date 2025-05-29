@@ -1,12 +1,14 @@
+import * as msal from "https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.11.0/+esm";
+
 const msalConfig = {
   auth: {
     clientId: "0486fae2-afeb-4044-ab8d-0c060910b0a8",
     authority: "https://login.microsoftonline.com/c06fea01-72bf-415d-ac1d-ac0382f8d39f",
-    redirectUri:'https://sambugopan1998.github.io/teams-app/hello.html',
+    redirectUri: "https://sambugopan1998.github.io/teams-app/hello.html"
   }
 };
 
-const scopes = ["User.Read", "Directory.Read.All"];
+const graphScopes = ["User.Read", "Directory.Read.All"];
 const msalInstance = new msal.PublicClientApplication(msalConfig);
 const app = document.querySelector(".app");
 
@@ -16,7 +18,7 @@ function render(content) {
 
 function renderError(error) {
   const errMsg = error?.message || JSON.stringify(error) || "Unknown error";
-  app.innerHTML += `
+  app.innerHTML = `
     <div style="color: red;">
       <h4>❌ Error:</h4>
       <pre>${errMsg}</pre>
@@ -37,26 +39,6 @@ function renderUser(user, groupsHTML, token) {
     <h3>🔑 Access Token</h3>
     <textarea readonly>${token}</textarea>
   `;
-}
-
-function signInButton() {
-  render(`<button id="signin">🔐 Sign in with Microsoft</button>`);
-  document.getElementById("signin").onclick = signIn;
-}
-
-async function signIn() {
-  try {
-    await microsoftTeams.app.initialize();
-
-    const isInIframe = window.parent !== window;
-    const loginMethod = isInIframe ? msalInstance.loginPopup : msalInstance.loginRedirect;
-
-    const loginResponse = await loginMethod.call(msalInstance, { scopes });
-    msalInstance.setActiveAccount(loginResponse.account);
-    await handleAuth();
-  } catch (err) {
-    renderError(err);
-  }
 }
 
 async function fetchGraphData(token) {
@@ -83,31 +65,40 @@ async function fetchGraphData(token) {
   }
 }
 
-async function handleAuth() {
+(async () => {
   try {
-    const accounts = msalInstance.getAllAccounts();
-    if (accounts.length === 0) {
-      signInButton();
-      return;
-    }
+    await msalInstance.initialize();
+    await microsoftTeams.app.initialize();
 
-    msalInstance.setActiveAccount(accounts[0]);
+    microsoftTeams.authentication.getAuthToken({
+      successCallback: async (ssoToken) => {
+        console.log("✅ Teams SSO Token:", ssoToken);
 
-    const tokenResp = await msalInstance.acquireTokenSilent({
-      scopes,
-      account: accounts[0]
+        const accounts = msalInstance.getAllAccounts();
+        if (accounts.length > 0) {
+          msalInstance.setActiveAccount(accounts[0]);
+
+          try {
+            const graphToken = await msalInstance.acquireTokenSilent({
+              scopes: graphScopes,
+              account: accounts[0]
+            });
+
+            console.log("✅ Graph token acquired silently");
+            await fetchGraphData(graphToken.accessToken);
+          } catch (silentErr) {
+            renderError("⚠️ Silent token failed. User must consent via popup or backend exchange.");
+          }
+        } else {
+          renderError("🛑 No MSAL account found. You need to sign in via backend or handle consent.");
+        }
+      },
+      failureCallback: (error) => {
+        renderError("🛑 Teams SSO failed: " + error);
+      }
     });
 
-    await fetchGraphData(tokenResp.accessToken);
-  } catch (e) {
-    renderError(e);
-    signInButton();
+  } catch (err) {
+    renderError(err);
   }
-}
-
-msalInstance.handleRedirectPromise().then(async (response) => {
-  if (response && response.account) {
-    msalInstance.setActiveAccount(response.account);
-  }
-  await handleAuth();
-}).catch(err => renderError(err));
+})();

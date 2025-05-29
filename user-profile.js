@@ -3,14 +3,14 @@ import * as msal from "https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.11.0/+
 // Replace with your actual values
 const msalConfig = {
   auth: {
-    clientId: "0486fae2-afeb-4044-ab8d-0c060910b0a8",
-    authority: "https://login.microsoftonline.com/c06fea01-72bf-415d-ac1d-ac0382f8d39f",
-    redirectUri: 'https://sambugopan1998.github.io/teams-app/hello.html',
+    clientId: "0486fae2-afeb-4044-ab8d-0c060910b0a8", // App A: SPA Client ID
+    authority: "https://login.microsoftonline.com/c06fea01-72bf-415d-ac1d-ac0382f8d39f", // Tenant ID
+    redirectUri: 'https://sambugopan1998.github.io/teams-app/hello.html', // Must be registered in App A
   }
 };
 
 // Scopes
-const apiScopes = ["api://40306a83-ec51-4935-b95e-485d3804873c/read"]; // App B: custom API
+const apiScopes = ["api://40306a83-ec51-4935-b95e-485d3804873c/read"]; // App B: Exposed scope
 const graphScopes = ["User.Read"]; // Microsoft Graph
 
 const msalInstance = new msal.PublicClientApplication(msalConfig);
@@ -90,16 +90,25 @@ async function fetchGraphData(token) {
   }
 }
 
-msalInstance.handleRedirectPromise().then(async (response) => {
-  if (response && response.account) {
-    msalInstance.setActiveAccount(response.account);
+// 🔁 Wrap everything in IIFE to await initialization before proceeding
+(async () => {
+  try {
+    await msalInstance.initialize(); // ✅ Initialize first
+
+    const response = await msalInstance.handleRedirectPromise();
+
+    if (response && response.account) {
+      msalInstance.setActiveAccount(response.account);
+    }
+
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length > 0) {
+      msalInstance.setActiveAccount(accounts[0]);
+      signIn(); // Auto sign in
+    } else {
+      signInButton(); // Show sign-in button
+    }
+  } catch (err) {
+    renderError(err);
   }
-  await msalInstance.initialize();
-  const accounts = msalInstance.getAllAccounts();
-  if (accounts.length > 0) {
-    msalInstance.setActiveAccount(accounts[0]);
-    signIn(); // auto continue if already logged in
-  } else {
-    signInButton();
-  }
-}).catch(err => renderError(err));
+})();

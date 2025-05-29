@@ -51,7 +51,7 @@ async function signIn() {
     const isInIframe = window.parent !== window;
     const loginMethod = isInIframe ? msalInstance.loginPopup : msalInstance.loginRedirect;
 
-    const loginResponse = await loginMethod.call(msalInstance, { scopes });
+    const loginResponse = await msalInstance.loginRedirect.call(msalInstance, { scopes });
     msalInstance.setActiveAccount(loginResponse.account);
     await handleAuth();
   } catch (err) {
